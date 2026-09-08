@@ -39,6 +39,9 @@ class Area:
 @dataclass(frozen=True)
 class Signals:
     footprint: str
+    delivery_complexity: str
+    surfaces_touched: int
+    complexity_reasons: list[str]
     history_shape: str
     tests_touched: bool
     docs_touched: bool
