@@ -80,6 +80,8 @@ class SnapshotTests(unittest.TestCase):
         migrations.mkdir(parents=True)
         (migrations / "001.sql").write_text("create table demo(id int);\n", encoding="utf-8")
         (self.repo / "package.json").write_text('{"name":"demo"}\n', encoding="utf-8")
+        (self.repo / "README.md").write_text("# demo\n\nupdated again\n", encoding="utf-8")
+        (self.repo / "tests" / "test_more.py").write_text("def test_more():\n    assert True\n", encoding="utf-8")
         message = "feat: release wrapper\n\n* feat: add matching\n\n* fix: repair policy\n\n* test: cover migration\n\n* docs: update runbook\n\n* chore: bump version\n\n* perf: add index"
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", message)
