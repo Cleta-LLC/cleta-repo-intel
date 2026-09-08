@@ -2,7 +2,7 @@
 
 Standalone, local-first repository intelligence for Cleta-managed codebases.
 
-The first capability is a release snapshot: compare two Git refs and produce an evidence-backed Markdown and JSON report describing the engineering footprint of the range.
+The first capability is a release snapshot: compare two Git refs and produce an evidence-backed Markdown and JSON report describing both the **engineering footprint** and **delivery complexity** of the range.
 
 It deliberately does **not** convert Git activity into hours worked or individual productivity.
 
@@ -50,13 +50,16 @@ release-reports/<head-ref>/report.md
 
 - exact base/head refs and SHAs
 - Git commits, detected conventional change items, and contributors
-- active development days
+- active development days visible in the selected Git history
 - changed files, additions, deletions, churn
 - conventional commit mix
 - source/test/docs/database/CI/config file surface
 - largest changed repository areas
 - squash-history detection so merge strategy does not silently undercount work
-- deterministic engineering-footprint signal
+- deterministic engineering-footprint signal for change-set size
+- deterministic delivery-complexity signal with explicit reasons such as database/schema changes, configuration changes, and cross-layer breadth
+
+The two signals are intentionally separate: a release can have moderate code volume but high delivery complexity because it crosses security-sensitive data, schema, workflow, or deployment boundaries.
 
 ## Python API
 
