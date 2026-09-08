@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cleta-repo-intel"
+version = "0.1.0"
+description = "Local-first repository intelligence for Cleta-managed codebases."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Cleta LLC" }]
+dependencies = []
+
+[project.scripts]
+cleta-repo = "cleta_repo_intel.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cleta_repo_intel"]
