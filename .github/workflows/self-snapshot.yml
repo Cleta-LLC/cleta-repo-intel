@@ -16,14 +16,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e .
-      - name: Run cleta-repo against itself
+      - name: Run cleta-repo against merged main
         run: |
           cleta-repo snapshot . \
             --from 1630e348c0fa216f142ca62e09bba91544a2bf83 \
-            --to HEAD \
+            --to 7e127d38046d75668694687492481fa0b4256b5f \
             --output self-snapshot
-          cat self-snapshot/HEAD/report.md
+          cat self-snapshot/7e127d38046d75668694687492481fa0b4256b5f/report.md
       - uses: actions/upload-artifact@v4
         with:
-          name: self-snapshot
-          path: self-snapshot/HEAD/
+          name: self-snapshot-main
+          path: self-snapshot/7e127d38046d75668694687492481fa0b4256b5f/
