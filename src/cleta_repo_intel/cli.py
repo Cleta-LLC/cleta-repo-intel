@@ -8,6 +8,7 @@ import sys
 
 from .analyze import analyze_release
 from .git import GitError
+from .html import render_html
 from .render import render_markdown
 
 
@@ -24,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--from", dest="base_ref", required=True, help="base Git ref")
     snapshot.add_argument("--to", dest="head_ref", default="HEAD", help="head Git ref (default: HEAD)")
     snapshot.add_argument("--output", type=Path, default=Path("release-reports"), help="output directory")
-    snapshot.add_argument("--format", choices=("both", "json", "markdown"), default="both")
+    snapshot.add_argument("--format", choices=("all", "both", "json", "markdown", "html"), default="all")
     return parser
 
 
@@ -32,14 +33,18 @@ def _snapshot(args: argparse.Namespace) -> int:
     report = analyze_release(args.repository, args.base_ref, args.head_ref)
     output_dir = args.output / _safe_name(args.head_ref)
     output_dir.mkdir(parents=True, exist_ok=True)
-    if args.format in {"both", "json"}:
+    if args.format in {"all", "both", "json"}:
         json_path = output_dir / "report.json"
         json_path.write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
         print(json_path)
-    if args.format in {"both", "markdown"}:
+    if args.format in {"all", "both", "markdown"}:
         md_path = output_dir / "report.md"
         md_path.write_text(render_markdown(report), encoding="utf-8")
         print(md_path)
+    if args.format in {"all", "html"}:
+        html_path = output_dir / "report.html"
+        html_path.write_text(render_html(report), encoding="utf-8")
+        print(html_path)
     return 0
 
 

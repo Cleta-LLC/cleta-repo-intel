@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 
 from .git import Commit, collect_commits, collect_file_changes, ensure_repository, resolve_ref
+from .intelligence import build_intelligence
 from .models import Activity, Area, Changes, RefRange, ReleaseSnapshot, Signals
 
 
@@ -112,7 +113,8 @@ def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD
     head_sha = resolve_ref(repo, head_ref)
     commits = collect_commits(repo, base_ref, head_ref)
     file_changes = collect_file_changes(repo, base_ref, head_ref)
-    change_items = [item for commit in commits for item in _change_items(commit)]
+    commit_items = [(commit, _change_items(commit)) for commit in commits]
+    change_items = [item for _, items in commit_items for item in items]
     work_types = Counter(_commit_type(item) for item in change_items)
     categories = Counter(_file_category(change.path) for change in file_changes)
     areas = Counter(_area(change.path) for change in file_changes)
@@ -122,6 +124,17 @@ def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD
     active_days = len({timestamp.date() for timestamp in timestamps})
     squash_like = len(change_items) >= 6 and len(change_items) > max(len(commits) * 3, 5)
     delivery_complexity, surfaces_touched, complexity_reasons = _delivery_complexity(categories, len(change_items))
+    signals = Signals(
+        footprint=_footprint(len(change_items), len(file_changes), additions + deletions),
+        delivery_complexity=delivery_complexity,
+        surfaces_touched=surfaces_touched,
+        complexity_reasons=complexity_reasons,
+        history_shape="squash_like" if squash_like else "direct",
+        tests_touched=categories.get("tests", 0) > 0,
+        docs_touched=categories.get("docs", 0) > 0,
+        database_touched=categories.get("database", 0) > 0,
+        ci_or_config_touched=(categories.get("ci", 0) + categories.get("config", 0)) > 0,
+    )
     warnings: list[str] = []
     if not commits:
         warnings.append("No commits found in the selected range.")
@@ -129,8 +142,9 @@ def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD
         warnings.append("No changed files found in the selected range.")
     if squash_like:
         warnings.append("History appears squash-compressed: Git commit count and active days reflect merged history; change-item counts are reconstructed from conventional sub-messages.")
+    intelligence = build_intelligence(commit_items, file_changes, work_types, signals)
     return ReleaseSnapshot(
-        schema_version="0.1",
+        schema_version="0.2",
         repository=repo.name,
         refs=RefRange(base_ref, base_sha, head_ref, head_sha),
         activity=Activity(
@@ -145,16 +159,7 @@ def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD
         work_types=dict(sorted(work_types.items())),
         file_categories=dict(sorted(categories.items())),
         areas=[Area(name, count) for name, count in areas.most_common(10)],
-        signals=Signals(
-            footprint=_footprint(len(change_items), len(file_changes), additions + deletions),
-            delivery_complexity=delivery_complexity,
-            surfaces_touched=surfaces_touched,
-            complexity_reasons=complexity_reasons,
-            history_shape="squash_like" if squash_like else "direct",
-            tests_touched=categories.get("tests", 0) > 0,
-            docs_touched=categories.get("docs", 0) > 0,
-            database_touched=categories.get("database", 0) > 0,
-            ci_or_config_touched=(categories.get("ci", 0) + categories.get("config", 0)) > 0,
-        ),
+        signals=signals,
+        intelligence=intelligence,
         warnings=warnings,
     )

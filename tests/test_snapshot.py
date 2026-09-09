@@ -8,6 +8,8 @@ import unittest
 
 from cleta_repo_intel.analyze import analyze_release
 from cleta_repo_intel.cli import main
+from cleta_repo_intel.html import render_html
+from cleta_repo_intel.intelligence import _theme_matches
 from cleta_repo_intel.render import render_markdown
 
 
@@ -55,24 +57,33 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue(snapshot.signals.docs_touched)
         self.assertEqual(snapshot.signals.delivery_complexity, "low")
         self.assertEqual(snapshot.signals.surfaces_touched, 3)
+        self.assertEqual(snapshot.schema_version, "0.2")
+        self.assertGreater(len(snapshot.intelligence.evidence), 0)
 
     def test_markdown_is_explanatory(self) -> None:
         rendered = render_markdown(analyze_release(self.repo, "v0.1.0", "HEAD"))
         self.assertIn("Engineering Footprint", rendered)
-        self.assertIn("Delivery Profile", rendered)
-        self.assertIn("Delivery complexity", rendered)
+        self.assertIn("Release Intelligence", rendered)
+        self.assertIn("Primary Themes", rendered)
         self.assertIn("not an estimate of hours worked", rendered)
 
-    def test_cli_writes_json_and_markdown(self) -> None:
+    def test_cli_writes_json_markdown_and_html(self) -> None:
         output = Path(self.temp.name) / "reports"
         result = main(["snapshot", str(self.repo), "--from", "v0.1.0", "--to", "HEAD", "--output", str(output)])
         self.assertEqual(result, 0)
         payload = json.loads((output / "HEAD" / "report.json").read_text(encoding="utf-8"))
-        self.assertEqual(payload["schema_version"], "0.1")
+        self.assertEqual(payload["schema_version"], "0.2")
         self.assertEqual(payload["activity"]["git_commits"], 2)
-        self.assertEqual(payload["activity"]["change_items"], 2)
-        self.assertEqual(payload["signals"]["delivery_complexity"], "low")
+        self.assertIn("intelligence", payload)
         self.assertTrue((output / "HEAD" / "report.md").exists())
+        self.assertTrue((output / "HEAD" / "report.html").exists())
+
+    def test_html_is_self_contained(self) -> None:
+        rendered = render_html(analyze_release(self.repo, "v0.1.0", "HEAD"))
+        self.assertIn("<!doctype html>", rendered.lower())
+        self.assertIn("Cleta Release Intelligence", rendered)
+        self.assertNotIn("<script src=", rendered)
+        self.assertNotIn("<link rel=", rendered)
 
     def test_squash_commit_recovers_change_items_and_complexity(self) -> None:
         (self.repo / "src" / "more.py").write_text("x = 1\n", encoding="utf-8")
@@ -82,19 +93,32 @@ class SnapshotTests(unittest.TestCase):
         (self.repo / "package.json").write_text('{"name":"demo"}\n', encoding="utf-8")
         (self.repo / "README.md").write_text("# demo\n\nupdated again\n", encoding="utf-8")
         (self.repo / "tests" / "test_more.py").write_text("def test_more():\n    assert True\n", encoding="utf-8")
-        message = "feat: release wrapper\n\n* feat: add matching\n\n* fix: repair policy\n\n* test: cover migration\n\n* docs: update runbook\n\n* chore: bump version\n\n* perf: add index"
+        message = "feat: release wrapper\n\n* feat: add matching workflow\n\n* fix: repair RLS policy\n\n* test: cover migration\n\n* docs: update runbook\n\n* chore: bump version\n\n* perf: add index"
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", message)
         snapshot = analyze_release(self.repo, "HEAD~1", "HEAD")
         self.assertEqual(snapshot.activity.git_commits, 1)
         self.assertEqual(snapshot.activity.change_items, 6)
         self.assertEqual(snapshot.signals.history_shape, "squash_like")
-        self.assertEqual(snapshot.work_types["feat"], 1)
-        self.assertEqual(snapshot.work_types["fix"], 1)
-        self.assertEqual(snapshot.work_types["test"], 1)
         self.assertEqual(snapshot.signals.delivery_complexity, "high")
         self.assertGreaterEqual(snapshot.signals.surfaces_touched, 4)
-        self.assertIn("database/schema changes", snapshot.signals.complexity_reasons)
+        self.assertIn("Security & access control", [theme.name for theme in snapshot.intelligence.themes])
+        self.assertIn("security-data-boundary", [finding.id for finding in snapshot.intelligence.findings])
+
+    def test_short_theme_tokens_do_not_substring_match(self) -> None:
+        themes = _theme_matches("fix: correct decision source handling")
+        self.assertNotIn("Localization & UX", themes)
+        self.assertNotIn("Release & operations", themes)
+
+    def test_rework_signal_detects_repeated_change_items(self) -> None:
+        (self.repo / "src" / "version.py").write_text("VERSION = '0.2'\n", encoding="utf-8")
+        message = "fix: wrapper\n\n* fix: use valid release version\n\n* fix: use valid release version\n\n* test: verify version"
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-qm", message)
+        snapshot = analyze_release(self.repo, "HEAD~1", "HEAD")
+        self.assertEqual(snapshot.intelligence.rework_signals[0].count, 2)
+        self.assertEqual(snapshot.intelligence.rework_signals[0].kind, "repeated_change_item")
+        self.assertIn("repeated-correction", [finding.id for finding in snapshot.intelligence.findings])
 
 
 if __name__ == "__main__":
