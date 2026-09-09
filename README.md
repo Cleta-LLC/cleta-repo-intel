@@ -2,20 +2,20 @@
 
 Standalone, local-first repository intelligence for Cleta-managed codebases.
 
-The first capability is a release snapshot: compare two Git refs and produce an evidence-backed Markdown and JSON report describing both the **engineering footprint** and **delivery complexity** of the range.
+`cleta-repo` compares two Git refs and produces evidence-backed release intelligence for humans and agents. The deterministic layer owns facts; semantic interpretation is derived from those facts and always links back to repository evidence.
 
 It deliberately does **not** convert Git activity into hours worked or individual productivity.
 
-## v0.1 scope
+## Current scope
 
 - local Git repository input
 - Python 3.12+
 - standard library at runtime
 - no GitHub API requirement
 - no database
-- no LLM
-- no repository writes
-- Markdown + JSON output
+- no LLM requirement
+- no target-repository writes
+- JSON, Markdown, and self-contained HTML output
 
 ## Install
 
@@ -31,40 +31,69 @@ cleta-repo snapshot /path/to/repository \
   --to v0.5.8
 ```
 
-For a checked-out Encargo frontend while the next release is still on `main`:
-
-```bash
-cleta-repo snapshot /path/to/encargo-test-cleta \
-  --from 8127015f3cc72ba5d1019b79273a9bd36ba82fb2 \
-  --to main
-```
-
 Default output:
 
 ```text
 release-reports/<head-ref>/report.json
 release-reports/<head-ref>/report.md
+release-reports/<head-ref>/report.html
 ```
 
-## Report contents
+Use `--format json`, `--format markdown`, or `--format html` for one artifact. `--format both` preserves the original JSON + Markdown behavior; `--format all` is the default.
+
+## What the report knows
+
+### Deterministic evidence
 
 - exact base/head refs and SHAs
-- Git commits, detected conventional change items, and contributors
-- active development days visible in the selected Git history
-- changed files, additions, deletions, churn
-- conventional commit mix
-- source/test/docs/database/CI/config file surface
-- largest changed repository areas
-- squash-history detection so merge strategy does not silently undercount work
-- deterministic engineering-footprint signal for change-set size
-- deterministic delivery-complexity signal with explicit reasons such as database/schema changes, configuration changes, and cross-layer breadth
+- Git commits and contributors
+- conventional change-item reconstruction for squash-compressed histories
+- changed files, additions, deletions, and churn
+- source/test/docs/database/CI/config surfaces
+- major repository areas
+- engineering-footprint and delivery-complexity signals
 
-The two signals are intentionally separate: a release can have moderate code volume but high delivery complexity because it crosses security-sensitive data, schema, workflow, or deployment boundaries.
+### Release intelligence
+
+- release character such as feature delivery, stabilization, or cross-layer hardening
+- evidence-linked themes such as workflow/product behavior, security/access control, data/schema, validation, localization, performance, and release operations
+- explicit findings with level, kind, confidence, and evidence IDs
+- repeated change-item detection as a conservative rework/iteration signal
+- a concise executive narrative
+- a self-contained HTML report with expandable evidence
+
+Themes can overlap because one change can affect more than one delivery concern. A test around an RLS migration, for example, is both validation evidence and security/data evidence.
+
+## Evidence-first agent model
+
+The report schema is designed so future agents can reason over a stable evidence layer instead of scraping prose.
+
+```text
+Git refs / commits / files
+          |
+          v
+  deterministic snapshot
+          |
+          v
+ evidence records + signals
+          |
+          v
+ themes / findings / narrative
+          |
+     +----+-----+
+     |          |
+   humans     agents
+ Markdown     MCP / API
+ HTML         investigation
+ JSON         automation
+```
+
+An LLM can later improve clustering, explanations, and investigation, but it should not be allowed to replace or fabricate the underlying evidence.
 
 ## Python API
 
 ```python
-from cleta_repo_intel import analyze_release, render_markdown
+from cleta_repo_intel import analyze_release, render_html, render_markdown
 
 report = analyze_release(
     "/path/to/repo",
@@ -73,14 +102,17 @@ report = analyze_release(
 )
 
 print(render_markdown(report))
+html = render_html(report)
 ```
 
 ## Roadmap
 
-- `v0.1.0`: local Git snapshot
-- `v0.2.0`: optional remote clone/fetch ingestion
-- `v0.3.0`: optional GitHub PR/review/CI enrichment
-- `v0.4.0`: semver history and consecutive snapshots
-- `v0.5.0`: autodocs/agent consumers if the reports prove useful
+- `v0.1.0` - deterministic local Git release snapshot: refs, change-item reconstruction, footprint, delivery complexity, file surfaces
+- `v0.2.0` - **semantic release intelligence**: evidence graph, release character, themes, risk/assurance/process findings, conservative rework signals, executive narrative, self-contained HTML
+- `v0.3.0` - **delivery enrichment and history**: GitHub PR/review/CI/deployment evidence, consecutive-release baselines, relative metrics, hotspot and trend analysis
+- `v0.4.0` - **agent interface**: MCP tools for snapshot, compare, explain, investigate, assess risk, trace a feature, and generate audience-specific briefs
+- `v0.5.0` - **fleet ingestion**: optional clone/fetch adapters and multi-repository operation across GitHub and private/bare-metal Git while keeping local Git first-class
+
+Claude Code, Copilot, ChatGPT, or another agent should be consumers of the evidence service rather than hard-coded dependencies of the product.
 
 The target repositories should not need to vendor this code. They are inputs, not hosts.
