@@ -16,15 +16,15 @@ _SPACE = re.compile(r"\s+")
 _THEME_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "Security & access control",
-        ("security", "rls", "role", "policy", "permission", "grant", "auth", "access", "tenant", "authorization"),
+        ("security", "rls", "role", "roles", "policy", "policies", "permission", "permissions", "grant", "grants", "auth", "access", "tenant", "tenants", "authorization"),
     ),
     (
         "Workflow & product behavior",
-        ("workflow", "reconciliation", "queue", "route", "buyer", "supplier", "portal", "catalog", "matching", "match"),
+        ("workflow", "workflows", "reconciliation", "queue", "queues", "route", "routes", "routing", "buyer", "buyers", "supplier", "suppliers", "portal", "catalog", "matching", "matches", "match"),
     ),
     (
         "Data & schema",
-        ("migration", "database", "schema", "table", "column", "foreign key", "fk", "index", "unique", "sku", "alias"),
+        ("migration", "migrations", "database", "schema", "table", "tables", "column", "columns", "foreign key", "foreign keys", "fk", "index", "indexes", "indexing", "unique", "uniqueness", "sku", "skus", "alias", "aliases"),
     ),
     (
         "Quality & validation",
@@ -51,9 +51,14 @@ def _normalize(text: str) -> str:
     return _SPACE.sub(" ", normalized).strip()
 
 
+def _keyword_in_text(text: str, keyword: str) -> bool:
+    haystack = " " + re.sub(r"[^a-z0-9]+", " ", text.lower()).strip() + " "
+    needle = re.sub(r"[^a-z0-9]+", " ", keyword.lower()).strip()
+    return bool(needle) and f" {needle} " in haystack
+
+
 def _theme_matches(text: str) -> list[str]:
-    lowered = text.lower()
-    return [name for name, keywords in _THEME_RULES if any(keyword in lowered for keyword in keywords)]
+    return [name for name, keywords in _THEME_RULES if any(_keyword_in_text(text, keyword) for keyword in keywords)]
 
 
 def _file_theme_matches(path: str) -> list[str]:
