@@ -79,6 +79,33 @@ def _footprint(change_items: int, files: int, churn: int) -> str:
     return "very_large"
 
 
+def _delivery_complexity(categories: Counter[str], change_items: int) -> tuple[str, int, list[str]]:
+    surfaces_touched = sum(1 for count in categories.values() if count > 0)
+    score = 0
+    reasons: list[str] = []
+
+    if categories.get("database", 0) > 0:
+        score += 2
+        reasons.append("database/schema changes")
+    if categories.get("ci", 0) + categories.get("config", 0) > 0:
+        score += 1
+        reasons.append("CI/configuration changes")
+    if surfaces_touched >= 4:
+        score += 2
+        reasons.append(f"cross-layer changes across {surfaces_touched} repository surfaces")
+    if change_items >= 20:
+        score += 1
+        reasons.append("broad reconstructed change set")
+
+    if score <= 1:
+        complexity = "low"
+    elif score <= 3:
+        complexity = "medium"
+    else:
+        complexity = "high"
+    return complexity, surfaces_touched, reasons
+
+
 def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD") -> ReleaseSnapshot:
     repo = ensure_repository(Path(repository))
     base_sha = resolve_ref(repo, base_ref)
@@ -94,6 +121,7 @@ def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD
     timestamps = [datetime.fromisoformat(commit.timestamp) for commit in commits]
     active_days = len({timestamp.date() for timestamp in timestamps})
     squash_like = len(change_items) >= 6 and len(change_items) > max(len(commits) * 3, 5)
+    delivery_complexity, surfaces_touched, complexity_reasons = _delivery_complexity(categories, len(change_items))
     warnings: list[str] = []
     if not commits:
         warnings.append("No commits found in the selected range.")
@@ -119,6 +147,9 @@ def analyze_release(repository: str | Path, base_ref: str, head_ref: str = "HEAD
         areas=[Area(name, count) for name, count in areas.most_common(10)],
         signals=Signals(
             footprint=_footprint(len(change_items), len(file_changes), additions + deletions),
+            delivery_complexity=delivery_complexity,
+            surfaces_touched=surfaces_touched,
+            complexity_reasons=complexity_reasons,
             history_shape="squash_like" if squash_like else "direct",
             tests_touched=categories.get("tests", 0) > 0,
             docs_touched=categories.get("docs", 0) > 0,

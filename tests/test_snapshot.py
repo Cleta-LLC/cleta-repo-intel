@@ -53,10 +53,14 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.work_types["docs"], 1)
         self.assertTrue(snapshot.signals.tests_touched)
         self.assertTrue(snapshot.signals.docs_touched)
+        self.assertEqual(snapshot.signals.delivery_complexity, "low")
+        self.assertEqual(snapshot.signals.surfaces_touched, 3)
 
     def test_markdown_is_explanatory(self) -> None:
         rendered = render_markdown(analyze_release(self.repo, "v0.1.0", "HEAD"))
         self.assertIn("Engineering Footprint", rendered)
+        self.assertIn("Delivery Profile", rendered)
+        self.assertIn("Delivery complexity", rendered)
         self.assertIn("not an estimate of hours worked", rendered)
 
     def test_cli_writes_json_and_markdown(self) -> None:
@@ -67,12 +71,19 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], "0.1")
         self.assertEqual(payload["activity"]["git_commits"], 2)
         self.assertEqual(payload["activity"]["change_items"], 2)
+        self.assertEqual(payload["signals"]["delivery_complexity"], "low")
         self.assertTrue((output / "HEAD" / "report.md").exists())
 
-    def test_squash_commit_recovers_change_items(self) -> None:
+    def test_squash_commit_recovers_change_items_and_complexity(self) -> None:
         (self.repo / "src" / "more.py").write_text("x = 1\n", encoding="utf-8")
-        git(self.repo, "add", ".")
+        migrations = self.repo / "supabase" / "migrations"
+        migrations.mkdir(parents=True)
+        (migrations / "001.sql").write_text("create table demo(id int);\n", encoding="utf-8")
+        (self.repo / "package.json").write_text('{"name":"demo"}\n', encoding="utf-8")
+        (self.repo / "README.md").write_text("# demo\n\nupdated again\n", encoding="utf-8")
+        (self.repo / "tests" / "test_more.py").write_text("def test_more():\n    assert True\n", encoding="utf-8")
         message = "feat: release wrapper\n\n* feat: add matching\n\n* fix: repair policy\n\n* test: cover migration\n\n* docs: update runbook\n\n* chore: bump version\n\n* perf: add index"
+        git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", message)
         snapshot = analyze_release(self.repo, "HEAD~1", "HEAD")
         self.assertEqual(snapshot.activity.git_commits, 1)
@@ -81,6 +92,9 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.work_types["feat"], 1)
         self.assertEqual(snapshot.work_types["fix"], 1)
         self.assertEqual(snapshot.work_types["test"], 1)
+        self.assertEqual(snapshot.signals.delivery_complexity, "high")
+        self.assertGreaterEqual(snapshot.signals.surfaces_touched, 4)
+        self.assertIn("database/schema changes", snapshot.signals.complexity_reasons)
 
 
 if __name__ == "__main__":
