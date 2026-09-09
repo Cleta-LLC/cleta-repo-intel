@@ -1,0 +1,29 @@
+name: self-snapshot
+
+on:
+  push:
+    branches: ["test/self-snapshot"]
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e .
+      - name: Run cleta-repo against itself
+        run: |
+          cleta-repo snapshot . \
+            --from 1630e348c0fa216f142ca62e09bba91544a2bf83 \
+            --to HEAD \
+            --output self-snapshot
+          cat self-snapshot/HEAD/report.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: self-snapshot
+          path: self-snapshot/HEAD/
