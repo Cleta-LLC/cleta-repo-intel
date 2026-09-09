@@ -9,6 +9,7 @@ import unittest
 from cleta_repo_intel.analyze import analyze_release
 from cleta_repo_intel.cli import main
 from cleta_repo_intel.html import render_html
+from cleta_repo_intel.intelligence import _theme_matches
 from cleta_repo_intel.render import render_markdown
 
 
@@ -103,6 +104,11 @@ class SnapshotTests(unittest.TestCase):
         self.assertGreaterEqual(snapshot.signals.surfaces_touched, 4)
         self.assertIn("Security & access control", [theme.name for theme in snapshot.intelligence.themes])
         self.assertIn("security-data-boundary", [finding.id for finding in snapshot.intelligence.findings])
+
+    def test_short_theme_tokens_do_not_substring_match(self) -> None:
+        themes = _theme_matches("fix: correct decision source handling")
+        self.assertNotIn("Localization & UX", themes)
+        self.assertNotIn("Release & operations", themes)
 
     def test_rework_signal_detects_repeated_change_items(self) -> None:
         (self.repo / "src" / "version.py").write_text("VERSION = '0.2'\n", encoding="utf-8")
